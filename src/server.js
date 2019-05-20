@@ -36,16 +36,6 @@ controller.setupWebserver(process.env.PORT || 3001, (err, webserver) => {
   });
 });
 
-// const getYelp = (place, food) => {
-//   yelpClient.search({
-//     term: 'Sushi',
-//     location: 'hanover, nh',
-//   }).then((response) => {
-//     return (response.jsonBody.businesses);
-//   }).catch((e) => {
-//     console.log(e);
-//   });
-// };
 
 controller.hears(['hello', 'hi', 'howdy'], ['direct_message', 'direct_mention', 'mention'], (bot, message) => {
   bot.api.users.info({ user: message.user }, (err, res) => {
@@ -57,17 +47,51 @@ controller.hears(['hello', 'hi', 'howdy'], ['direct_message', 'direct_mention', 
   });
 });
 
+const foodOptions = { type: '', place: '' };
 controller.hears(['hungry'], ['direct_message', 'direct_mention', 'mention'], (bot, message) => {
   console.log('in hungry');
   bot.createConversation(message, (err, convo) => {
     convo.ask('What kind of food would you like?', async (answer) => {
     // do nothing.
+      foodOptions.type = answer.text;
       convo.gotoThread('place_q');
     }, { key: 'type' }, 'default');
 
-    convo.ask('Where do you want to search for food?', async (answer) => {
+    convo.addQuestion('Where do you want to search for food?', async (answer) => {
     // do nothing.
-      console.log('in place');
+      foodOptions.place = answer.text;
+
+      console.log(foodOptions);
+
+      yelpClient.search({
+        term: foodOptions.type,
+        location: foodOptions.place,
+      }).then((response) => {
+        convo.say('Here are all the food options with a rating above 4');
+        convo.next();
+        // console.log(response.jsonBody.businesses);
+        response.jsonBody.businesses.forEach((business) => {
+          if (business.rating > 4) {
+            const replyWithAttachment = {
+              attachments: [
+                {
+                  title: business.name,
+                  title_link: business.url,
+                  text: business.price,
+                  image_url: business.image_url,
+                  color: '#6da5ff',
+                },
+              ],
+            };
+            console.log(replyWithAttachment);
+            convo.say(replyWithAttachment);
+            convo.next();
+          }
+        });
+      }).catch((e) => {
+        console.log(e);
+        convo.say('problem fetching results!');
+      });
     }, { key: 'place' }, 'place_q');
 
     convo.activate();
@@ -84,7 +108,6 @@ controller.hears(['help'], ['direct_message', 'direct_mention', 'mention'], (bot
 controller.on(['direct_message', 'direct_mention', 'mention'], (bot, message) => {
   bot.reply(message, 'Come again?');
 });
-
 
 controller.on('outgoing_webhook', (bot, message) => {
   bot.replyPublic(message, 'Im up!');
